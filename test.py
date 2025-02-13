@@ -3,15 +3,22 @@ import requests
 from PIL import Image
 from io import BytesIO
 from matplotlib import pyplot as plt
+from dotenv import load_dotenv
+from huggingface_hub import login
+import os
 
 # We'll be exploring a number of pipelines today!
 from diffusers import (
     StableDiffusionPipeline,
 )
 
+load_dotenv()
+token = os.getenv('MY_TOKEN')
+login(token)
+
 device = "mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu"
 
-model_id = "stabilityai/stable-diffusion-2-1-base"
+model_id = "stabilityai/stable-diffusion-3.5-large"
 pipe = StableDiffusionPipeline.from_pretrained(model_id).to(device)
 
 generator = torch.Generator(device=device).manual_seed(42)
