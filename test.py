@@ -1,10 +1,12 @@
 import torch
 from flask import Flask, request, jsonify, send_file
+from flask_cors import CORS
 from diffusers import BitsAndBytesConfig, SD3Transformer2DModel, StableDiffusion3Pipeline
 from transformers import T5EncoderModel
 import os
 
 app = Flask(__name__)
+CORS(app)
 
 # Model Configuration
 model_id = "stabilityai/stable-diffusion-3.5-large-turbo"
@@ -59,7 +61,6 @@ def generate():
             guidance_scale=guidance_scale,
             max_sequence_length=max_seq_length,
         ).images[0]
-
         output_path = "generated_image.png"
         image.save(output_path)
         return send_file(output_path, mimetype='image/png')
