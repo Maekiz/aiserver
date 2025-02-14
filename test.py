@@ -24,4 +24,4 @@ image = pipe(
     width=width,
     height=height
 ).images[0]
-image.save('output.PNG')
+image.save('output.png')
