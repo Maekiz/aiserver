@@ -1,27 +1,71 @@
 import torch
-from diffusers import StableDiffusion3Pipeline
-from huggingface_hub import login
+from flask import Flask, request, jsonify, send_file
+from diffusers import BitsAndBytesConfig, SD3Transformer2DModel, StableDiffusion3Pipeline
+from transformers import T5EncoderModel
 import os
-from dotenv import load_dotenv
 
-load_dotenv()
+app = Flask(__name__)
 
-token = os.getenv('HUG_TOKEN')
-login(token)
+# Model Configuration
+model_id = "stabilityai/stable-diffusion-3.5-large-turbo"
 
-pipe = StableDiffusion3Pipeline.from_pretrained("stabilityai/stable-diffusion-3.5-large-turbo", torch_dtype=torch.bfloat16)
-pipe = pipe.to("cuda")
+nf4_config = BitsAndBytesConfig(
+    load_in_4bit=True,
+    bnb_4bit_quant_type="nf4",
+    bnb_4bit_compute_dtype=torch.bfloat16
+)
 
-width = 1024
-height = 1024
+# Load models
+print("Loading transformer model...")
+model_nf4 = SD3Transformer2DModel.from_pretrained(
+    model_id,
+    subfolder="transformer",
+    quantization_config=nf4_config,
+    torch_dtype=torch.bfloat16
+)
 
-prompt="Palette knife painting of an autumn cityscape"
+print("Loading text encoder model...")
+t5_nf4 = T5EncoderModel.from_pretrained("diffusers/t5-nf4", torch_dtype=torch.bfloat16)
 
-image = pipe(
-    prompt=prompt,
-    num_inference_steps=2,
-    guidance_scale=7,
-    width=width,
-    height=height
-).images[0]
-image.save('output.png')
+print("Initializing pipeline...")
+pipeline = StableDiffusion3Pipeline.from_pretrained(
+    model_id,
+    transformer=model_nf4,
+    text_encoder_3=t5_nf4,
+    torch_dtype=torch.bfloat16
+)
+pipeline.enable_model_cpu_offload()
+
+@app.route('/generate', methods=['POST'])
+def generate():
+    try:
+        # Get JSON data from request
+        data = request.get_json()
+
+        # Validate prompt input
+        if not data or 'prompt' not in data:
+            return jsonify({"error": "Missing 'prompt' in request body"}), 400
+
+        prompt = data['prompt']
+        num_steps = data.get('num_inference_steps', 4)
+        guidance_scale = data.get('guidance_scale', 0.0)
+        max_seq_length = data.get('max_sequence_length', 512)
+
+        print(f"Generating image for prompt: {prompt}")
+
+        image = pipeline(
+            prompt=prompt,
+            num_inference_steps=num_steps,
+            guidance_scale=guidance_scale,
+            max_sequence_length=max_seq_length,
+        ).images[0]
+
+        output_path = "generated_image.png"
+        image.save(output_path)
+        return send_file(output_path, mimetype='image/png')
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=True)
