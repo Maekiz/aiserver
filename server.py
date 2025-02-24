@@ -97,5 +97,7 @@ if __name__ == '__main__':
     options = {
         'bind': '0.0.0.0:5000',  # Changed to port 5000, you can use any available port
         'workers': 4,
+        'timeout': 300,
+        'worker_class': 'gevent'
     }
     StandaloneApplication(app, options).run()
