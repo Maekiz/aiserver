@@ -52,19 +52,19 @@ def generate():
         num_steps = data.get('num_inference_steps', 4)
         guidance_scale = data.get('guidance_scale', 0.0)
         max_seq_length = data.get('max_sequence_length', 512)
-        height = data.get('height', 1024)
-        width = data.get('width', 1024)
+        userHeight = data.get('height', 1024)
+        userWidth = data.get('width', 1024)
 
 
         print(f"Generating image for prompt: {prompt}")
-
+        print(f"{userWidth}x{userHeight}")
         image = pipeline(
             prompt=prompt,
             num_inference_steps=num_steps,
             guidance_scale=guidance_scale,
             max_sequence_length=max_seq_length,
-            height=height,
-            width=width
+            height=userHeight,
+            width=userWidth
         ).images[0]
         output_path = "generated_image.png"
         image.save(output_path)
