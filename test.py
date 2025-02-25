@@ -25,7 +25,6 @@ model_nf4 = SD3Transformer2DModel.from_pretrained(
     quantization_config=nf4_config,
     torch_dtype=torch.bfloat16
 )
-
 print("Loading text encoder model...")
 t5_nf4 = T5EncoderModel.from_pretrained("diffusers/t5-nf4", torch_dtype=torch.bfloat16)
 
