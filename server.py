@@ -1,3 +1,6 @@
+import resource
+resource.setrlimit(resource.RLIMIT_NOFILE, (65535, 65535))
+
 import torch
 import torch.multiprocessing as mp
 from flask import Flask, request, jsonify, send_file
@@ -7,7 +10,6 @@ from transformers import T5EncoderModel
 import os
 import logging
 from gunicorn.app.base import BaseApplication
-from functools import partial
 
 mp.set_start_method('spawn', force=True)
 
@@ -45,24 +47,34 @@ def load_model():
     pipeline.enable_model_cpu_offload()
     return pipeline
 
-def worker_init(pipeline):
-    global model
-    model = pipeline
+def worker_process(task_queue, result_queue):
+    pipeline = load_model()
+    while True:
+        task = task_queue.get()
+        if task is None:
+            break
+        prompt, num_steps, guidance_scale, max_seq_length, userHeight, userWidth = task
+        image = pipeline(
+            prompt=prompt,
+            num_inference_steps=num_steps,
+            guidance_scale=guidance_scale,
+            max_sequence_length=max_seq_length,
+            height=userHeight,
+            width=userWidth
+        ).images[0]
+        output_path = f"generated_image_{os.getpid()}.png"
+        image.save(output_path)
+        result_queue.put(output_path)
 
-def generate_image(prompt, num_steps, guidance_scale, max_seq_length, userHeight, userWidth):
-    image = model(
-        prompt=prompt,
-        num_inference_steps=num_steps,
-        guidance_scale=guidance_scale,
-        max_sequence_length=max_seq_length,
-        height=userHeight,
-        width=userWidth
-    ).images[0]
-    output_path = f"generated_image_{os.getpid()}.png"
-    image.save(output_path)
-    return output_path
+num_workers = 2
+task_queue = mp.Queue()
+result_queue = mp.Queue()
+workers = []
 
-pool = None
+for _ in range(num_workers):
+    p = mp.Process(target=worker_process, args=(task_queue, result_queue))
+    p.start()
+    workers.append(p)
 
 @app.route('/generate', methods=['POST'])
 def generate():
@@ -82,7 +94,9 @@ def generate():
         app.logger.info(f"Generating image for prompt: {prompt}")
         app.logger.info(f"{userWidth}x{userHeight}")
 
-        output_path = pool.apply(generate_image, (prompt, num_steps, guidance_scale, max_seq_length, userHeight, userWidth))
+        task_queue.put((prompt, num_steps, guidance_scale, max_seq_length, userHeight, userWidth))
+        output_path = result_queue.get()
+
         return send_file(output_path, mimetype='image/png')
 
     except Exception as e:
@@ -105,9 +119,6 @@ class StandaloneApplication(BaseApplication):
         return self.application
 
 if __name__ == '__main__':
-    pipeline = load_model()
-    pool = mp.Pool(processes=2, initializer=worker_init, initargs=(pipeline,))
-
     options = {
         'bind': '0.0.0.0:5000',
         'workers': 1,
@@ -115,3 +126,9 @@ if __name__ == '__main__':
         'worker_class': 'gevent'
     }
     StandaloneApplication(app, options).run()
+
+# Cleanup
+for _ in range(num_workers):
+    task_queue.put(None)
+for p in workers:
+    p.join()
