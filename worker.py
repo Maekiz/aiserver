@@ -4,6 +4,7 @@ from transformers import T5EncoderModel
 import os
 
 def load_model():
+    torch.cuda.empty_cache()
     model_id = "stabilityai/stable-diffusion-3.5-large-turbo"
     nf4_config = BitsAndBytesConfig(
         load_in_4bit=True,
