@@ -1,4 +1,5 @@
 import torch
+import torch.multiprocessing as mp
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 from diffusers import BitsAndBytesConfig, SD3Transformer2DModel, StableDiffusion3Pipeline
@@ -6,6 +7,8 @@ from transformers import T5EncoderModel
 import os
 import logging
 from gunicorn.app.base import BaseApplication
+
+mp.set_start_method('spawn', force=True)
 
 app = Flask(__name__)
 CORS(app)
