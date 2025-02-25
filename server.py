@@ -16,7 +16,7 @@ CORS(app)
 
 logging.basicConfig(level=logging.INFO)
 
-num_workers = 2
+num_workers = 1
 task_queue = mp.Queue()
 result_queue = mp.Queue()
 workers = []
