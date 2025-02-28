@@ -7,7 +7,7 @@ import os
 os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, origins=['https://aleksanderekman.github.io/bakkadiffusion/'])
 
 # Model Configuration
 model_id = "stabilityai/stable-diffusion-3.5-large-turbo"
