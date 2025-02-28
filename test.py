@@ -39,7 +39,7 @@ pipeline = StableDiffusion3Pipeline.from_pretrained(
 pipeline.enable_model_cpu_offload()
 
 @app.route('/generate', methods=['POST'])
-def generate():
+async def generate():
     try:
         # Get JSON data from request
         data = request.get_json()
@@ -58,7 +58,7 @@ def generate():
 
         print(f"Generating image for prompt: {prompt}")
         print(f"{userWidth}x{userHeight}")
-        image = pipeline(
+        image = await pipeline(
             prompt=prompt,
             num_inference_steps=num_steps,
             guidance_scale=guidance_scale,
