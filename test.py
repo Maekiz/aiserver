@@ -58,7 +58,7 @@ async def generate():
 
         print(f"Generating image for prompt: {prompt}")
         print(f"{userWidth}x{userHeight}")
-        image = await pipeline(
+        image = pipeline(
             prompt=prompt,
             num_inference_steps=num_steps,
             guidance_scale=guidance_scale,
