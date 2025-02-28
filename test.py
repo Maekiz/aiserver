@@ -7,7 +7,7 @@ import os
 os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
 
 app = Flask(__name__)
-CORS(app, origins=['https://aleksanderekman.github.io/bakkadiffusion/'])
+CORS(app, origins=['https://aleksanderekman.github.io'])
 
 # Model Configuration
 model_id = "stabilityai/stable-diffusion-3.5-large-turbo"
@@ -71,7 +71,8 @@ def generate():
         return send_file(output_path, mimetype='image/png')
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        raise e
+        # return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=False)
