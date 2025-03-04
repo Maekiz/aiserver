@@ -8,37 +8,40 @@ multiprocessing.set_start_method('spawn', force=True)
 
 celery = Celery('tasks', broker='redis://localhost:6379/0')
 
-model_id = "stabilityai/stable-diffusion-3.5-large-turbo"
+def main():
+    model_id = "stabilityai/stable-diffusion-3.5-large-turbo"
 
-nf4_config = BitsAndBytesConfig(
-    load_in_4bit=True,
-    bnb_4bit_quant_type="nf4",
-    bnb_4bit_compute_dtype=torch.bfloat16
-)
+    nf4_config = BitsAndBytesConfig(
+        load_in_4bit=True,
+        bnb_4bit_quant_type="nf4",
+        bnb_4bit_compute_dtype=torch.bfloat16
+    )
 
-# Load models
-print("Loading transformer model...")
-model_nf4 = SD3Transformer2DModel.from_pretrained(
-    model_id,
-    subfolder="transformer",
-    quantization_config=nf4_config,
-    torch_dtype=torch.bfloat16
-)
-print("Loading text encoder model...")
-t5_nf4 = T5EncoderModel.from_pretrained("diffusers/t5-nf4", torch_dtype=torch.bfloat16)
+    # Load models
+    print("Loading transformer model...")
+    model_nf4 = SD3Transformer2DModel.from_pretrained(
+        model_id,
+        subfolder="transformer",
+        quantization_config=nf4_config,
+        torch_dtype=torch.bfloat16
+    )
+    print("Loading text encoder model...")
+    t5_nf4 = T5EncoderModel.from_pretrained("diffusers/t5-nf4", torch_dtype=torch.bfloat16)
 
 
-print("Initializing pipeline...")
-pipeline = StableDiffusion3Pipeline.from_pretrained(
-    model_id,
-    transformer=model_nf4,
-    text_encoder_3=t5_nf4,
-    torch_dtype=torch.bfloat16
-)
-pipeline.enable_model_cpu_offload()
+    print("Initializing pipeline...")
+    global pipeline
+    pipeline = StableDiffusion3Pipeline.from_pretrained(
+        model_id,
+        transformer=model_nf4,
+        text_encoder_3=t5_nf4,
+        torch_dtype=torch.bfloat16
+    )
+    pipeline.enable_model_cpu_offload()
 
 @celery.task(bind=True)
 def worker(self, prompt, num_steps, guidance_scale, max_seq_length, userHeight, userWidth):
+    global pipeline
     try:
         print(f"Generating image for prompt: {prompt}")
         print(f"{userWidth}x{userHeight}")
@@ -59,3 +62,6 @@ def worker(self, prompt, num_steps, guidance_scale, max_seq_length, userHeight, 
 
     except Exception as e:
         return {"status": "failed", "error": str(e)}
+
+if __name__ == '__main__':
+    main()
