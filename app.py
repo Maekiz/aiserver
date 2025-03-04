@@ -4,19 +4,24 @@ import os
 from celery.result import AsyncResult
 from celery_worker import worker
 
+# Enable expandable segments for CUDA memory allocation
 os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
 
+# Initialize Flask app
 app = Flask(__name__)
 app.config.update(
     CELERY_BROKER_URL='redis://localhost:6379/0',  # Redis broker URL
     CELERY_RESULT_BACKEND='redis://localhost:6379/0',  # Redis result backend
 )
+
+# Enable CORS for specific origins
 CORS(app, origins=['https://aleksanderekman.github.io', "https://bakkadiffusion.vercel.app"])
 
+# Route to generate an image based on the prompt
 @app.route('/generate', methods=['POST'])
 def generate():
     try:
-        # Get JSON data from request
+        # Get JSON data from the request
         data = request.get_json()
 
         # Validate prompt input
@@ -38,6 +43,7 @@ def generate():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# Route to check the status and get the result of the task
 @app.route('/result/<task_id>', methods=['GET'])
 def get_result(task_id):
     try:
@@ -64,4 +70,5 @@ def get_result(task_id):
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
+    # Start the Flask app
     app.run(host='0.0.0.0', port=5000, debug=True)
