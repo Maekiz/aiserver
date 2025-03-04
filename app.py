@@ -1,11 +1,8 @@
 import torch
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
-from diffusers import BitsAndBytesConfig, SD3Transformer2DModel, StableDiffusion3Pipeline
-from transformers import T5EncoderModel
+from celery_worker import make_celery, create_pipeline, create_worker  # Import refactored functions
 import os
-from celery_worker import make_celery, worker  # Fixed redundant import
-
 
 os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
 
@@ -15,38 +12,16 @@ app.config.update(
     CELERY_RESULT_BACKEND="redis://localhost:6379/0",
 )
 
+# Initialize Celery
 celery = make_celery(app)
 
+# Initialize pipeline
+pipeline = create_pipeline()
+
+# Create the Celery worker
+worker = create_worker(celery)
+
 CORS(app, origins=['https://aleksanderekman.github.io', "https://bakkadiffusion.vercel.app"])
-
-# Model Configuration
-model_id = "stabilityai/stable-diffusion-3.5-large-turbo"
-
-nf4_config = BitsAndBytesConfig(
-    load_in_4bit=True,
-    bnb_4bit_quant_type="nf4",
-    bnb_4bit_compute_dtype=torch.bfloat16
-)
-
-# Load models
-print("Loading transformer model...")
-model_nf4 = SD3Transformer2DModel.from_pretrained(
-    model_id,
-    subfolder="transformer",
-    quantization_config=nf4_config,
-    torch_dtype=torch.bfloat16
-)
-print("Loading text encoder model...")
-t5_nf4 = T5EncoderModel.from_pretrained("diffusers/t5-nf4", torch_dtype=torch.bfloat16)
-
-print("Initializing pipeline...")
-pipeline = StableDiffusion3Pipeline.from_pretrained(
-    model_id,
-    transformer=model_nf4,
-    text_encoder_3=t5_nf4,
-    torch_dtype=torch.bfloat16
-)
-pipeline.enable_model_cpu_offload()
 
 @app.route('/generate', methods=['POST'])
 def generate():
@@ -62,7 +37,7 @@ def generate():
         userWidth = data.get('width', 1024)
 
         # Start Celery task
-        task = worker.delay(prompt, num_steps, guidance_scale, max_seq_length, userHeight, userWidth)
+        task = worker.delay(prompt, num_steps, guidance_scale, max_seq_length, userHeight, userWidth, pipeline)
 
         return jsonify({"message": "Task started", "task_id": task.id}), 202
 
