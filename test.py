@@ -8,6 +8,7 @@ from celery import Celery
 
 os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
 
+# Flask App Initialization
 app = Flask(__name__)
 CORS(app, origins=['https://aleksanderekman.github.io', "https://bakkadiffusion.vercel.app"])
 
@@ -15,8 +16,12 @@ CORS(app, origins=['https://aleksanderekman.github.io', "https://bakkadiffusion.
 app.config['CELERY_BROKER_URL'] = 'redis://localhost:6379/0'
 app.config['CELERY_RESULT_BACKEND'] = 'redis://localhost:6379/0'
 
-celery = Celery(app.name, broker=app.config['CELERY_BROKER_URL'])
-celery.conf.update(app.config)
+def make_celery(app):
+    celery = Celery(app.import_name, broker=app.config['CELERY_BROKER_URL'])
+    celery.conf.update(app.config)
+    return celery
+
+celery = make_celery(app)
 
 # Model Configuration
 model_id = "stabilityai/stable-diffusion-3.5-large-turbo"
@@ -73,10 +78,8 @@ def worker(self, prompt, num_steps, guidance_scale, max_seq_length, userHeight, 
 @app.route('/generate', methods=['POST'])
 def generate():
     try:
-        # Get JSON data from request
         data = request.get_json()
 
-        # Validate prompt input
         if not data or 'prompt' not in data:
             return jsonify({"error": "Missing 'prompt' in request body"}), 400
 
@@ -87,7 +90,6 @@ def generate():
         userHeight = data.get('height', 1024)
         userWidth = data.get('width', 1024)
 
-        # Start Celery task
         task = worker.delay(prompt, num_steps, guidance_scale, max_seq_length, userHeight, userWidth)
 
         return jsonify({"message": "Task started", "task_id": task.id}), 202
