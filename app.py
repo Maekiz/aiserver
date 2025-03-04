@@ -4,11 +4,22 @@ from flask_cors import CORS
 from diffusers import BitsAndBytesConfig, SD3Transformer2DModel, StableDiffusion3Pipeline
 from transformers import T5EncoderModel
 import os
-from celery_worker import celery 
+from celery_worker import make_celery  # Import the Celery factory function
+from celery_worker import worker  # Import the worker task
+
 
 os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
 
+from celery_worker import make_celery  # Import the Celery factory function
+
 app = Flask(__name__)
+app.config.update(
+    CELERY_BROKER_URL="redis://localhost:6379/0",
+    CELERY_RESULT_BACKEND="redis://localhost:6379/0",
+)
+
+celery = make_celery(app)
+
 CORS(app, origins=['https://aleksanderekman.github.io', "https://bakkadiffusion.vercel.app"])
 
 # Model Configuration
@@ -39,29 +50,6 @@ pipeline = StableDiffusion3Pipeline.from_pretrained(
     torch_dtype=torch.bfloat16
 )
 pipeline.enable_model_cpu_offload()
-
-@celery.task(bind=True)
-def worker(self, prompt, num_steps, guidance_scale, max_seq_length, userHeight, userWidth):
-    try:
-        print(f"Generating image for prompt: {prompt}")
-        print(f"{userWidth}x{userHeight}")
-
-        image = pipeline(
-            prompt=prompt,
-            num_inference_steps=num_steps,
-            guidance_scale=guidance_scale,
-            max_sequence_length=max_seq_length,
-            height=userHeight,
-            width=userWidth
-        ).images[0]
-        
-        output_path = f"generated_image_{self.request.id}.png"
-        image.save(output_path)
-
-        return {"status": "completed", "file_path": output_path}
-
-    except Exception as e:
-        return {"status": "failed", "error": str(e)}
 
 @app.route('/generate', methods=['POST'])
 def generate():
