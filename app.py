@@ -4,13 +4,10 @@ from flask_cors import CORS
 from diffusers import BitsAndBytesConfig, SD3Transformer2DModel, StableDiffusion3Pipeline
 from transformers import T5EncoderModel
 import os
-from celery_worker import make_celery  # Import the Celery factory function
-from celery_worker import worker  # Import the worker task
+from celery_worker import make_celery, worker  # Fixed redundant import
 
 
 os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
-
-from celery_worker import make_celery  # Import the Celery factory function
 
 app = Flask(__name__)
 app.config.update(
