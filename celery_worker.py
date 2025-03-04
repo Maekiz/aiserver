@@ -6,9 +6,11 @@ import torch
 
 multiprocessing.set_start_method('spawn', force=True)
 
+global pipeline
 celery = Celery('tasks', broker='redis://localhost:6379/0')
 
 def main():
+    global pipeline
     model_id = "stabilityai/stable-diffusion-3.5-large-turbo"
 
     nf4_config = BitsAndBytesConfig(
@@ -30,7 +32,6 @@ def main():
 
 
     print("Initializing pipeline...")
-    global pipeline
     pipeline = StableDiffusion3Pipeline.from_pretrained(
         model_id,
         transformer=model_nf4,
