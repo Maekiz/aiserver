@@ -9,14 +9,18 @@ multiprocessing.set_start_method('spawn', force=True)
 
 celery = Celery('tasks', broker='redis://localhost:6379/0')
 
-# Global variable (will be initialized inside the worker)
-pipeline = None  
+# Use a dictionary to store pipeline per thread
+pipeline_storage = {}
 
 @worker_process_init.connect
 def initialize_pipeline(**kwargs):
-    global pipeline
-    if pipeline is None:  # Load only if not already loaded
-        print("Initializing pipeline inside worker process...")
+    """Ensure the pipeline is initialized inside the worker process."""
+    global pipeline_storage
+    thread_id = torch.cuda.current_device()  # Get unique ID per worker thread
+
+    if thread_id not in pipeline_storage:  # Initialize pipeline only once per thread
+        print(f"Initializing pipeline in worker thread {thread_id}...")
+
         model_id = "stabilityai/stable-diffusion-3.5-large-turbo"
 
         nf4_config = BitsAndBytesConfig(
@@ -25,7 +29,7 @@ def initialize_pipeline(**kwargs):
             bnb_4bit_compute_dtype=torch.bfloat16
         )
 
-        # Load models inside worker process
+        # Load models inside worker thread
         print("Loading transformer model...")
         model_nf4 = SD3Transformer2DModel.from_pretrained(
             model_id,
@@ -45,13 +49,21 @@ def initialize_pipeline(**kwargs):
         )
         pipeline.enable_model_cpu_offload()
 
+        # Store pipeline in the dictionary
+        pipeline_storage[thread_id] = pipeline
+
 @celery.task(bind=True)
 def worker(self, prompt, num_steps, guidance_scale, max_seq_length, userHeight, userWidth):
-    global pipeline
-    try:
-        if pipeline is None:
-            raise RuntimeError("Pipeline was not initialized in worker process!")
+    """Generate an image using the preloaded pipeline."""
+    global pipeline_storage
+    thread_id = torch.cuda.current_device()
 
+    if thread_id not in pipeline_storage:
+        return {"status": "failed", "error": "Pipeline was not initialized in worker process!"}
+
+    pipeline = pipeline_storage[thread_id]  # Get pipeline for this worker
+
+    try:
         print(f"Generating image for prompt: {prompt}")
         print(f"Image size: {userWidth}x{userHeight}")
 
