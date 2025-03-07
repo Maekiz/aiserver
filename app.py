@@ -44,22 +44,20 @@ def generate():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# ✅ Route to check task status and retrieve image
 @app.route('/result/<task_id>', methods=['GET'])
 def get_result(task_id):
     try:
-        # ✅ Use Celery app, not worker task
         task = AsyncResult(task_id, app=celery)
-
+        print(f"Task state: {task.state}")
         if task.state == 'PENDING':
             return jsonify({"message": "Processing, please check later"}), 202
-
         elif task.state == 'SUCCESS':
             result = task.result
+            print(f"Task result: {result}")
             if result["status"] == "completed":
                 file_path = result["file_path"]
-                # ✅ Ensure file exists before returning it (wait for a few seconds)
-                for _ in range(5):  # Retry for up to 5 seconds
+                # Ensure file exists before returning it
+                for _ in range(5):
                     if os.path.exists(file_path):
                         return send_file(file_path, mimetype='image/png')
                     time.sleep(1)
@@ -73,6 +71,7 @@ def get_result(task_id):
             return jsonify({"status": task.state}), 200
 
     except Exception as e:
+        print(f"Error in get_result: {e}")
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
