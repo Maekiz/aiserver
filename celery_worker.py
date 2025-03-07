@@ -3,14 +3,17 @@ from celery import Celery
 from diffusers import BitsAndBytesConfig, SD3Transformer2DModel, StableDiffusion3Pipeline
 from transformers import T5EncoderModel
 import torch
+from celery.signals import worker_process_init
 
 multiprocessing.set_start_method('spawn', force=True)
 
 celery = Celery('tasks', broker='redis://localhost:6379/0')
 
-pipeline = None
+# Global variable (will be initialized inside the worker)
+pipeline = None  
 
-def initialize_pipeline():
+@worker_process_init.connect
+def initialize_pipeline(**kwargs):
     global pipeline
     if pipeline is None:  # Load only if not already loaded
         print("Initializing pipeline inside worker process...")
@@ -22,7 +25,7 @@ def initialize_pipeline():
             bnb_4bit_compute_dtype=torch.bfloat16
         )
 
-        # Load models
+        # Load models inside worker process
         print("Loading transformer model...")
         model_nf4 = SD3Transformer2DModel.from_pretrained(
             model_id,
@@ -42,25 +45,15 @@ def initialize_pipeline():
         )
         pipeline.enable_model_cpu_offload()
 
-
-    print("Initializing pipeline...")
-    pipeline = StableDiffusion3Pipeline.from_pretrained(
-        model_id,
-        transformer=model_nf4,
-        text_encoder_3=t5_nf4,
-        torch_dtype=torch.bfloat16
-    )
-    pipeline.enable_model_cpu_offload()
-    
-
 @celery.task(bind=True)
 def worker(self, prompt, num_steps, guidance_scale, max_seq_length, userHeight, userWidth):
     global pipeline
     try:
-        initialize_pipeline()
+        if pipeline is None:
+            raise RuntimeError("Pipeline was not initialized in worker process!")
 
         print(f"Generating image for prompt: {prompt}")
-        print(f"{userWidth}x{userHeight}")
+        print(f"Image size: {userWidth}x{userHeight}")
 
         image = pipeline(
             prompt=prompt,
@@ -69,7 +62,8 @@ def worker(self, prompt, num_steps, guidance_scale, max_seq_length, userHeight, 
             max_sequence_length=max_seq_length,
             height=userHeight,
             width=userWidth
-        ).images[0]    
+        ).images[0]
+
         output_path = f"generated_image_{self.request.id}.png"
         image.save(output_path)
 
