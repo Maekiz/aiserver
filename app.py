@@ -1,8 +1,9 @@
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 import os
+import time  # ✅ To wait for file generation
 from celery.result import AsyncResult
-from celery_worker import worker
+from celery_worker import celery, worker  # ✅ Import Celery app
 
 # Enable expandable segments for CUDA memory allocation
 os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
@@ -17,7 +18,7 @@ app.config.update(
 # Enable CORS for specific origins
 CORS(app, origins=['https://aleksanderekman.github.io', "https://bakkadiffusion.vercel.app"])
 
-# Route to generate an image based on the prompt
+# ✅ Route to generate an image based on the prompt
 @app.route('/generate', methods=['POST'])
 def generate():
     try:
@@ -43,26 +44,31 @@ def generate():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# Route to check the status and get the result of the task
+# ✅ Route to check task status and retrieve image
 @app.route('/result/<task_id>', methods=['GET'])
 def get_result(task_id):
     try:
-        # Use AsyncResult to check the status of the task
-        task = AsyncResult(task_id, app=worker)
+        # ✅ Use Celery app, not worker task
+        task = AsyncResult(task_id, app=celery)
 
         if task.state == 'PENDING':
             return jsonify({"message": "Processing, please check later"}), 202
+
         elif task.state == 'SUCCESS':
             result = task.result
             if result["status"] == "completed":
-                # Ensure the file exists before sending it
                 file_path = result["file_path"]
-                if os.path.exists(file_path):
-                    return send_file(file_path, mimetype='image/png')
-                else:
-                    return jsonify({"error": "File not found"}), 404
+                # ✅ Ensure file exists before returning it (wait for a few seconds)
+                for _ in range(5):  # Retry for up to 5 seconds
+                    if os.path.exists(file_path):
+                        return send_file(file_path, mimetype='image/png')
+                    time.sleep(1)
+
+                return jsonify({"error": "File not found, try again later"}), 404
+
             else:
                 return jsonify({"error": result["error"]}), 500
+
         else:
             return jsonify({"status": task.state}), 200
 
