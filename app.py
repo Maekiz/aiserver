@@ -39,7 +39,7 @@ def generate():
         # Start Celery task
         task = worker.delay(prompt, num_steps, guidance_scale,max_seq_length, userHeight, userWidth)
 
-        print('task', task.id, task.status)
+        print('task', task.id, task.state)
 
         return jsonify({"message": "Task started", "task_id": task.id}), 202
 
