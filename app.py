@@ -1,9 +1,9 @@
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 import os
-import time  # ✅ To wait for file generation
+import time  # To wait for file generation
 from celery.result import AsyncResult
-from celery_worker import celery, worker  # ✅ Import Celery app
+from celery_worker import celery  # Import Celery app
 
 # Enable expandable segments for CUDA memory allocation
 os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
@@ -18,7 +18,7 @@ app.config.update(
 # Enable CORS for specific origins
 #CORS(app, origins=['https://aleksanderekman.github.io', "https://bakkadiffusion.vercel.app"])
 
-# ✅ Route to generate an image based on the prompt
+# Route to generate an image based on the prompt
 @app.route('/generate', methods=['POST'])
 def generate():
     try:
@@ -37,7 +37,7 @@ def generate():
         userWidth = data.get('width', 1024)
 
         # Start Celery task
-        task = worker.apply_async(args=[prompt, num_steps, guidance_scale, max_seq_length, userHeight, userWidth])
+        task = celery.send_task('celery_worker.worker', args=[prompt, num_steps, guidance_scale, max_seq_length, userHeight, userWidth])
 
         return jsonify({"message": "Task started", "task_id": task.id}), 202
 
@@ -47,27 +47,40 @@ def generate():
 @app.route('/result/<task_id>', methods=['GET'])
 def get_result(task_id):
     try:
+        # Create an AsyncResult object to track the task status
         task = AsyncResult(task_id, app=celery)
+
+        # Print task state for debugging
         print(f"Task state: {task.state}")
+
+        # Check task state
         if task.state == 'PENDING':
             return jsonify({"message": "Processing, please check later"}), 202
+
         elif task.state == 'SUCCESS':
             result = task.result
             print(f"Task result: {result}")
+
+            # Check if the task was successful and completed
             if result["status"] == "completed":
                 file_path = result["file_path"]
-                # Ensure file exists before returning it
+                # Ensure the file exists before returning it (retry for a few seconds)
                 for _ in range(5):
                     if os.path.exists(file_path):
                         return send_file(file_path, mimetype='image/png')
+
+                    # Retry after 1 second if file doesn't exist yet
                     time.sleep(1)
 
+                # If file is not found after retries, return an error
                 return jsonify({"error": "File not found, try again later"}), 404
 
             else:
+                # If there was an error during image generation
                 return jsonify({"error": result["error"]}), 500
 
         else:
+            # If the task is in any other state
             return jsonify({"status": task.state}), 200
 
     except Exception as e:
