@@ -3,7 +3,7 @@ from flask_cors import CORS
 import os
 import time  # To wait for file generation
 from celery.result import AsyncResult
-from celery_worker import celery  # Import Celery app
+from celery_worker import celery, worker  # Import Celery app
 
 # Enable expandable segments for CUDA memory allocation
 os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
@@ -37,7 +37,9 @@ def generate():
         userWidth = data.get('width', 1024)
 
         # Start Celery task
-        task = celery.send_task('celery_worker.worker', args=[prompt, num_steps, guidance_scale, max_seq_length, userHeight, userWidth])
+        task = worker.delay(prompt, num_steps, guidance_scale,max_seq_length, userHeight, userWidth)
+
+        print('message: ', task.id, task.status)
 
         return jsonify({"message": "Task started", "task_id": task.id}), 202
 
@@ -47,13 +49,10 @@ def generate():
 @app.route('/result/<task_id>', methods=['GET'])
 def get_result(task_id):
     try:
-        # Create an AsyncResult object to track the task status
         task = AsyncResult(task_id, app=celery)
 
-        # Print task state for debugging
         print(f"Task state: {task.state}")
 
-        # Check task state
         if task.state == 'PENDING':
             return jsonify({"message": "Processing, please check later"}), 202
 
