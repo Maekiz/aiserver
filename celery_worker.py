@@ -6,31 +6,41 @@ import torch
 
 multiprocessing.set_start_method('spawn', force=True)
 
-    
-
-global pipeline
 celery = Celery('tasks', broker='redis://localhost:6379/0')
 
-def initilize_pipeline():
+pipeline = None
+
+def initialize_pipeline():
     global pipeline
-    model_id = "stabilityai/stable-diffusion-3.5-large-turbo"
+    if pipeline is None:  # Load only if not already loaded
+        print("Initializing pipeline inside worker process...")
+        model_id = "stabilityai/stable-diffusion-3.5-large-turbo"
 
-    nf4_config = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_quant_type="nf4",
-        bnb_4bit_compute_dtype=torch.bfloat16
-    )
+        nf4_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_compute_dtype=torch.bfloat16
+        )
 
-    # Load models
-    print("Loading transformer model...")
-    model_nf4 = SD3Transformer2DModel.from_pretrained(
-        model_id,
-        subfolder="transformer",
-        quantization_config=nf4_config,
-        torch_dtype=torch.bfloat16
-    )
-    print("Loading text encoder model...")
-    t5_nf4 = T5EncoderModel.from_pretrained("diffusers/t5-nf4", torch_dtype=torch.bfloat16)
+        # Load models
+        print("Loading transformer model...")
+        model_nf4 = SD3Transformer2DModel.from_pretrained(
+            model_id,
+            subfolder="transformer",
+            quantization_config=nf4_config,
+            torch_dtype=torch.bfloat16
+        )
+        print("Loading text encoder model...")
+        t5_nf4 = T5EncoderModel.from_pretrained("diffusers/t5-nf4", torch_dtype=torch.bfloat16)
+
+        print("Initializing pipeline...")
+        pipeline = StableDiffusion3Pipeline.from_pretrained(
+            model_id,
+            transformer=model_nf4,
+            text_encoder_3=t5_nf4,
+            torch_dtype=torch.bfloat16
+        )
+        pipeline.enable_model_cpu_offload()
 
 
     print("Initializing pipeline...")
@@ -47,7 +57,7 @@ def initilize_pipeline():
 def worker(self, prompt, num_steps, guidance_scale, max_seq_length, userHeight, userWidth):
     global pipeline
     try:
-        initilize_pipeline()
+        initialize_pipeline()
 
         print(f"Generating image for prompt: {prompt}")
         print(f"{userWidth}x{userHeight}")
