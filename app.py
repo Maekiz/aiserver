@@ -57,10 +57,10 @@ def generate():
         max_seq_length = data.get('max_sequence_length', 512)
         userHeight = data.get('height', 1024)
         userWidth = data.get('width', 1024)
+        username = data.get('username', 'user')
 
-
-        print(f"Generating image for prompt: {prompt}")
-        print(f"{userWidth}x{userHeight}")
+        print(f"{username}: Generating image for prompt: {prompt}")
+        print(f"Resolution: {userWidth}x{userHeight}")
         image = pipeline(
             prompt=prompt,
             num_inference_steps=num_steps,
