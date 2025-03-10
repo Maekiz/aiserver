@@ -30,17 +30,17 @@ nf4_config = BitsAndBytesConfig(
 )
 
 # Load models
-logging.info("Loading transformer model...")
+print("Loading transformer model...")
 model_nf4 = SD3Transformer2DModel.from_pretrained(
     model_id,
     subfolder="transformer",
     quantization_config=nf4_config,
     torch_dtype=torch.bfloat16
 )
-logging.info("Loading text encoder model...")
+print("Loading text encoder model...")
 t5_nf4 = T5EncoderModel.from_pretrained("diffusers/t5-nf4", torch_dtype=torch.bfloat16)
 
-logging.info("Initializing pipeline...")
+print("Initializing pipeline...")
 pipeline = StableDiffusion3Pipeline.from_pretrained(
     model_id,
     transformer=model_nf4,
@@ -69,8 +69,8 @@ def generate():
         username = data.get('username', 'user')
         ip = data.get('ip', 'unknown')
 
-        logging.info(f"{username} on IP {ip}: Generating image for prompt: {prompt}")
-        logging.info(f"Resolution: {userWidth}x{userHeight}")
+        logging.info(f"{username} on IP {ip}: Generating image (${userWidth}x{userHeight}) for prompt: {prompt}")
+
         image = pipeline(
             prompt=prompt,
             num_inference_steps=num_steps,
