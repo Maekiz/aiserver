@@ -3,12 +3,18 @@ from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 from diffusers import BitsAndBytesConfig, SD3Transformer2DModel, StableDiffusion3Pipeline
 from transformers import T5EncoderModel
+from celery import Celery
 import os
 import threading
 
 os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
 
 app = Flask(__name__)
+app.config['CELERY_BROKER_URL'] = 'redis://localhost:6379/0'
+app.config['CELERY_RESULT_BACKEND'] = 'redis://localhost:6379/0'
+
+celery = Celery(app.name, broker=app.config['CELERY_BROKER_URL'])
+celery.conf.update(app.config)
 lock = threading.Lock()
 CORS(app, origins=['https://aleksanderekman.github.io', "https://bakkadiffusion.vercel.app"])
 
@@ -41,6 +47,28 @@ pipeline = StableDiffusion3Pipeline.from_pretrained(
 )
 pipeline.enable_model_cpu_offload()
 
+
+@celery.task(bind=True)
+def generate_image(self, prompt, num_steps, guidance_scale, max_seq_length, userHeight, userWidth):
+    try:
+        print(f"Generating image for prompt: {prompt} ({userWidth}x{userHeight})")
+        image = pipeline(
+            prompt=prompt,
+            num_inference_steps=num_steps,
+            guidance_scale=guidance_scale,
+            max_sequence_length=max_seq_length,
+            height=userHeight,
+            width=userWidth
+        ).images[0]
+
+        output_path = f"generated_{self.request.id}.png"
+        image.save(output_path)
+
+        return {"status": "completed", "file_path": output_path}
+
+    except Exception as e:
+        return {"status": "failed", "error": str(e)}
+
 @app.route('/generate', methods=['POST'])
 def generate():
     with lock:
@@ -60,18 +88,25 @@ def generate():
 
 
         print(f"Generating image for prompt: {prompt}")
-        print(f"{userWidth}x{userHeight}")
-        image = pipeline(
-            prompt=prompt,
-            num_inference_steps=num_steps,
-            guidance_scale=guidance_scale,
-            max_sequence_length=max_seq_length,
-            height=userHeight,
-            width=userWidth
-        ).images[0]
-        output_path = "generated_image.png"
-        image.save(output_path)
-        return send_file(output_path, mimetype='image/png')
+        print(f"{userWidth}x{userHeight}")    
+        task = generate_image.apply_async(prompt,num_steps,guidance_scale,max_seq_length,userHeight,userWidth)
+
+    return jsonify({"message": "Task started", "task_id": task.id}), 202
+
+@app.route('/result/<task_id>', methods=['GET'])
+def get_result(task_id):
+    task = generate_image.AsyncResult(task_id)
+    if task.state == 'PENDING':
+        return jsonify({"message": "Processing, please check later"}), 202
+    elif task.state == 'SUCCESS':
+        result = task.result
+        if result["status"] == "completed":
+            return send_file(result["file_path"], mimetype='image/png')
+        else:
+            return jsonify({"error": result["error"]}), 500
+    else:
+        return jsonify({"status": task.state}), 200
+        
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
