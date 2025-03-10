@@ -5,6 +5,14 @@ from diffusers import BitsAndBytesConfig, SD3Transformer2DModel, StableDiffusion
 from transformers import T5EncoderModel
 import os
 import threading
+import logging
+
+# Setter opp logging
+logging.basicConfig(
+    filename='server.log',
+    level=logging.INFO,
+    format='%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
+)
 
 os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
 
@@ -22,17 +30,17 @@ nf4_config = BitsAndBytesConfig(
 )
 
 # Load models
-print("Loading transformer model...")
+logging.info("Loading transformer model...")
 model_nf4 = SD3Transformer2DModel.from_pretrained(
     model_id,
     subfolder="transformer",
     quantization_config=nf4_config,
     torch_dtype=torch.bfloat16
 )
-print("Loading text encoder model...")
+logging.info("Loading text encoder model...")
 t5_nf4 = T5EncoderModel.from_pretrained("diffusers/t5-nf4", torch_dtype=torch.bfloat16)
 
-print("Initializing pipeline...")
+logging.info("Initializing pipeline...")
 pipeline = StableDiffusion3Pipeline.from_pretrained(
     model_id,
     transformer=model_nf4,
@@ -49,6 +57,7 @@ def generate():
 
         # Validate prompt input
         if not data or 'prompt' not in data:
+            logging.error("Missing 'prompt' in request body")
             return jsonify({"error": "Missing 'prompt' in request body"}), 400
 
         prompt = data['prompt']
@@ -58,9 +67,10 @@ def generate():
         userHeight = data.get('height', 1024)
         userWidth = data.get('width', 1024)
         username = data.get('username', 'user')
+        ip = data.get('ip', 'unknown')
 
-        print(f"{username}: Generating image for prompt: {prompt}")
-        print(f"Resolution: {userWidth}x{userHeight}")
+        logging.info(f"{username} on IP {ip}: Generating image for prompt: {prompt}")
+        logging.info(f"Resolution: {userWidth}x{userHeight}")
         image = pipeline(
             prompt=prompt,
             num_inference_steps=num_steps,
