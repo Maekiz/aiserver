@@ -18,7 +18,7 @@ os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
 
 app = Flask(__name__)
 lock = threading.Lock()
-CORS(app, origins=['https://aleksanderekman.github.io', "https://bakkadiffusion.vercel.app"])
+CORS(app, origins=['https://aleksanderekman.github.io', "https://bakkadiffusion.vercel.app", "https://bakkadiffusion.no"])
 
 # Model Configuration
 model_id = "stabilityai/stable-diffusion-3.5-large-turbo"
