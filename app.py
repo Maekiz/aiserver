@@ -67,7 +67,7 @@ def generate():
         userHeight = data.get('height', 1024)
         userWidth = data.get('width', 1024)
         username = data.get('username', 'user')
-        ip = request.remote_addr
+        ip = request.headers.get('X-Forwarded-For')
 
         logging.info(f"{username} on IP {ip}: Generating image (${userWidth}x{userHeight}) for prompt: {prompt}")
 
