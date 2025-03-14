@@ -61,8 +61,8 @@ def generate():
             return jsonify({"error": "Missing 'prompt' in request body"}), 400
 
         prompt = data['prompt']
-        num_steps = data.get('num_inference_steps', 4)
-        guidance_scale = data.get('guidance_scale', 0.0)
+        num_steps = 8
+        guidance_scale = 0.0
         max_seq_length = data.get('max_sequence_length', 512)
         userHeight = data.get('height', 1024)
         userWidth = data.get('width', 1024)
