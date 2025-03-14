@@ -6,6 +6,10 @@ from transformers import T5EncoderModel
 import os
 import threading
 import logging
+import jwt
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Setter opp logging
 logging.basicConfig(
@@ -15,6 +19,7 @@ logging.basicConfig(
 )
 
 os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 
 app = Flask(__name__)
 lock = threading.Lock()
@@ -49,6 +54,18 @@ pipeline = StableDiffusion3Pipeline.from_pretrained(
 )
 pipeline.enable_model_cpu_offload()
 
+def verify_token(auth_token):
+    try:
+        decoded_data = jwt.decode(
+            auth_token,
+            JWT_SECRET_KEY,
+            algorithms=['HS256'],
+            options={"verify_exp": True} 
+        )
+        return decoded_data['userData']['username']
+    except:
+        return None
+
 @app.route('/generate', methods=['POST'])
 def generate():
     with lock:
@@ -66,7 +83,13 @@ def generate():
         max_seq_length = data.get('max_sequence_length', 512)
         userHeight = data.get('height', 1024)
         userWidth = data.get('width', 1024)
-        username = data.get('username', 'user')
+        authToken = data.get('authToken', None)
+
+        username = verify_token(authToken)
+        if username is None:
+            logging.error("Invalid token")
+            return jsonify({"error": "Invalid token"}), 401
+
         ip = request.headers.get('X-Forwarded-For')
 
         logging.info(f"{username} on IP {ip}: Generating image (${userWidth}x{userHeight}) for prompt: {prompt}")
