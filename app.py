@@ -92,7 +92,7 @@ def generate():
 
         ip = request.headers.get('X-Forwarded-For')
 
-        logging.info(f"{username} on IP {ip}: Generating image (${userWidth}x{userHeight}) for prompt: {prompt}")
+        logging.info(f"{username} on IP {ip}: Generating image ({userWidth}x{userHeight}) for prompt: {prompt}")
 
         image = pipeline(
             prompt=prompt,
