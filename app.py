@@ -80,7 +80,7 @@ def generate():
         prompt = data['prompt']
         num_steps = 8
         guidance_scale = 0.0
-        max_seq_length = data.get('max_sequence_length', 512)
+        max_seq_length = 512
         userHeight = data.get('height', 1024)
         userWidth = data.get('width', 1024)
         authToken = data.get('authToken', None)
@@ -90,8 +90,11 @@ def generate():
             logging.error("Invalid token")
             return jsonify({"error": "Invalid token"}), 401
 
-        ip = request.headers.get('X-Forwarded-For')
+        if userHeight > 1024 or userWidth > 1840 or userHeight < 1024 or userWidth < 576:
+            logging.error("Invalid image dimensions")
+            return jsonify({"error": "Invalid image dimensions"}), 400
 
+        ip = request.headers.get('X-Forwarded-For')
         logging.info(f"{username} on IP {ip}: Generating image ({userWidth}x{userHeight}) for prompt: {prompt}")
 
         image = pipeline(
