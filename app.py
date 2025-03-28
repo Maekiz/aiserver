@@ -83,8 +83,12 @@ def generate():
         max_seq_length = 512
         userHeight = data.get('height', 1024)
         userWidth = data.get('width', 1024)
-        authToken = data.get('authToken', None)
 
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith("Bearer "):
+            logging.error("Missing or invalid Authorization header")
+            return jsonify({"error": "Missing or invalid Authorization header"}), 401
+        authToken = auth_header.split(" ")[1]
         username = verify_token(authToken)
         if username is None:
             logging.error("Invalid token")
