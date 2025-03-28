@@ -13,6 +13,14 @@ from flask_limiter.util import get_remote_address
 gen_list = []
 load_dotenv()
 
+def get_client_ip():
+    # Check for X-Forwarded-For header first
+    if request.headers.get('X-Forwarded-For'):
+        # Use the first IP in the X-Forwarded-For list
+        return request.headers.get('X-Forwarded-For').split(',')[0].strip()
+    # Fallback to remote address
+    return request.remote_addr
+
 # Setter opp logging
 logging.basicConfig(
     filename='server.log',
@@ -28,7 +36,7 @@ lock = threading.Lock()
 CORS(app, origins=['https://aleksanderekman.github.io', "https://www.bakkadiffusion.no"])
 # Initialize Flask-Limiter
 limiter = Limiter(
-    get_remote_address,
+    key_func=get_client_ip,
     app=app,
     default_limits=["1 per 10 seconds"]  # Default rate limits
 )
