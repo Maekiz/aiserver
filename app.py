@@ -16,10 +16,17 @@ load_dotenv()
 def get_client_ip():
     # Check for X-Forwarded-For header first
     if request.headers.get('X-Forwarded-For'):
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith("Bearer "):
+            logging.error("Missing or invalid Authorization header")
+            return jsonify({"error": "Missing or invalid Authorization header"}), 401
+        
+        if auth_header.split(" ")[1] in gen_list:
+            return jsonify({"error": "User is already generating an image"}), 400
+        gen_list.append(auth_header.split(" ")[1])
+
         # Use the first IP in the X-Forwarded-For list
         return request.headers.get('X-Forwarded-For').split(',')[0].strip()
-    # Fallback to remote address
-    return request.remote_addr
 
 # Setter opp logging
 logging.basicConfig(
@@ -112,8 +119,6 @@ def generate():
         if username in gen_list:
             logging.error("User is already generating an image")
             return jsonify({"error": "User is already generating an image"}), 400
-        
-        gen_list.append(username)
 
         if userHeight > 1024 or userWidth > 1840 or userHeight < 1024 or userWidth < 576:
             logging.error("Invalid image dimensions")
@@ -132,7 +137,7 @@ def generate():
         ).images[0]
         output_path = "generated_image.png"
         image.save(output_path)
-        gen_list.remove(username)
+        gen_list.remove(authToken)
         return send_file(output_path, mimetype='image/png')
 
 if __name__ == '__main__':
