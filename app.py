@@ -8,6 +8,8 @@ import threading
 import logging
 import jwt
 from dotenv import load_dotenv
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 load_dotenv()
 
@@ -24,7 +26,12 @@ JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 app = Flask(__name__)
 lock = threading.Lock()
 CORS(app, origins=['https://aleksanderekman.github.io', "https://www.bakkadiffusion.no"])
-
+# Initialize Flask-Limiter
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=["1 per 10 seconds"]  # Default rate limits
+)
 # Model Configuration
 model_id = "stabilityai/stable-diffusion-3.5-large-turbo"
 
@@ -67,6 +74,7 @@ def verify_token(auth_token):
         return None
 
 @app.route('/generate', methods=['POST'])
+@limiter.limit("1 per 10 seconds")  # Rate limit for this endpoint
 def generate():
     with lock:
         # Get JSON data from request
