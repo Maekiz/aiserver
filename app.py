@@ -88,7 +88,11 @@ def ratelimit_handler(e):
 @limiter.limit("1 per 10 seconds")
 def generate():
     logging.info(gen_list)
-    # Add the username to gen_list before starting generation
+
+    if username in gen_list:
+        logging.error("User is already generating an image")
+        return jsonify({"error": "User is already generating an image"}), 400
+    
     auth_header = request.headers.get('Authorization')
     if auth_header and auth_header.startswith("Bearer "):
         authToken = auth_header.split(" ")[1]
@@ -101,10 +105,6 @@ def generate():
     else:
         logging.error("Missing or invalid Authorization header")
         return jsonify({"error": "Missing or invalid Authorization header"}), 401
-
-    if username in gen_list:
-        logging.error("User is already generating an image")
-        return jsonify({"error": "User is already generating an image"}), 400
     
     with lock:
         # Get JSON data from request
