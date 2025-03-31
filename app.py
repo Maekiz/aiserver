@@ -10,6 +10,7 @@ import jwt
 from dotenv import load_dotenv
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+global gen_list
 gen_list = []
 load_dotenv()
 
@@ -87,12 +88,13 @@ def ratelimit_handler(e):
 @app.route('/generate', methods=['POST'])
 @limiter.limit("1 per 10 seconds")
 def generate():
+    global gen_list
     logging.info(gen_list)
 
     if username in gen_list:
         logging.error("User is already generating an image")
         return jsonify({"error": "User is already generating an image"}), 400
-    
+
     auth_header = request.headers.get('Authorization')
     if auth_header and auth_header.startswith("Bearer "):
         authToken = auth_header.split(" ")[1]
