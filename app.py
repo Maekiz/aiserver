@@ -87,6 +87,7 @@ def ratelimit_handler(e):
 @app.route('/generate', methods=['POST'])
 @limiter.limit("1 per 10 seconds")
 def generate():
+    logging.info(gen_list)
     # Add the username to gen_list before starting generation
     auth_header = request.headers.get('Authorization')
     if auth_header and auth_header.startswith("Bearer "):
@@ -100,7 +101,7 @@ def generate():
     else:
         logging.error("Missing or invalid Authorization header")
         return jsonify({"error": "Missing or invalid Authorization header"}), 401
-    # Check if user is already generating an image
+
     if username in gen_list:
         logging.error("User is already generating an image")
         return jsonify({"error": "User is already generating an image"}), 400
