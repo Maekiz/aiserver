@@ -85,8 +85,14 @@ def ratelimit_handler(e):
     return jsonify({"error": "Rate limit exceeded. Please try again later."}), 429
 
 @app.route('/generate', methods=['POST'])
-@limiter.limit("1 per 10 seconds")  # Rate limit for this endpoint
+
 def generate():
+    if not limiter.test("1 per 10 seconds", key_func=get_client_ip):
+        logging.warning(f"Rate limit exceeded for IP: {get_client_ip()}")
+        return jsonify({"error": "Rate limit exceeded. Please try again later."}), 429
+
+    # Increment the rate limit counter
+    limiter.hit("1 per 10 seconds", key_func=get_client_ip)
     with lock:
         # Get JSON data from request
         data = request.get_json()
