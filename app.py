@@ -16,17 +16,8 @@ load_dotenv()
 def get_client_ip():
     # Check for X-Forwarded-For header first
     if request.headers.get('X-Forwarded-For'):
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith("Bearer "):
-            logging.error("Missing or invalid Authorization header")
-            return jsonify({"error": "Missing or invalid Authorization header"}), 401
-        
-        if auth_header.split(" ")[1] in gen_list:
-            return jsonify({"error": "User is already generating an image"}), 400
-        gen_list.append(auth_header.split(" ")[1])
-
-        # Use the first IP in the X-Forwarded-For list
         return request.headers.get('X-Forwarded-For').split(',')[0].strip()
+    return request.remote_addr
 
 # Setter opp logging
 logging.basicConfig(
@@ -87,6 +78,11 @@ def verify_token(auth_token):
         return decoded_data['userData']['username']
     except:
         return None
+    
+@app.errorhandler(429)
+def ratelimit_handler(e):
+    logging.warning(f"Rate limit exceeded: {request.remote_addr}")
+    return jsonify({"error": "Rate limit exceeded. Please try again later."}), 429
 
 @app.route('/generate', methods=['POST'])
 @limiter.limit("1 per 10 seconds")  # Rate limit for this endpoint
