@@ -91,22 +91,25 @@ def generate():
     global gen_list
     logging.info(gen_list)
 
-    if username in gen_list:
-        logging.error("User is already generating an image")
-        return jsonify({"error": "User is already generating an image"}), 400
+
 
     auth_header = request.headers.get('Authorization')
     if auth_header and auth_header.startswith("Bearer "):
         authToken = auth_header.split(" ")[1]
         username = verify_token(authToken)
         if username is not None:
-            gen_list.append(username)
+            pass
         else:
             logging.error("Invalid token")
             return jsonify({"error": "Invalid token"}), 401
     else:
         logging.error("Missing or invalid Authorization header")
         return jsonify({"error": "Missing or invalid Authorization header"}), 401
+    
+    if username in gen_list:
+        logging.error("User is already generating an image")
+        return jsonify({"error": "User is already generating an image"}), 400
+    gen_list.append(username)
     
     with lock:
         # Get JSON data from request
