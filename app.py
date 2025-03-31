@@ -85,14 +85,26 @@ def ratelimit_handler(e):
     return jsonify({"error": "Rate limit exceeded. Please try again later."}), 429
 
 @app.route('/generate', methods=['POST'])
-
+@limiter.limit("1 per 10 seconds")
 def generate():
-    if not limiter.test("1 per 10 seconds", key_func=get_client_ip):
-        logging.warning(f"Rate limit exceeded for IP: {get_client_ip()}")
-        return jsonify({"error": "Rate limit exceeded. Please try again later."}), 429
-
-    # Increment the rate limit counter
-    limiter.hit("1 per 10 seconds", key_func=get_client_ip)
+    # Add the username to gen_list before starting generation
+    auth_header = request.headers.get('Authorization')
+    if auth_header and auth_header.startswith("Bearer "):
+        authToken = auth_header.split(" ")[1]
+        username = verify_token(authToken)
+        if username is not None:
+            gen_list.append(username)
+        else:
+            logging.error("Invalid token")
+            return jsonify({"error": "Invalid token"}), 401
+    else:
+        logging.error("Missing or invalid Authorization header")
+        return jsonify({"error": "Missing or invalid Authorization header"}), 401
+    # Check if user is already generating an image
+    if username in gen_list:
+        logging.error("User is already generating an image")
+        return jsonify({"error": "User is already generating an image"}), 400
+    
     with lock:
         # Get JSON data from request
         data = request.get_json()
@@ -118,9 +130,7 @@ def generate():
         if username is None:
             logging.error("Invalid token")
             return jsonify({"error": "Invalid token"}), 401
-        if username in gen_list:
-            logging.error("User is already generating an image")
-            return jsonify({"error": "User is already generating an image"}), 400
+
 
         if userHeight > 1024 or userWidth > 1840 or userHeight < 1024 or userWidth < 576:
             logging.error("Invalid image dimensions")
