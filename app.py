@@ -14,19 +14,13 @@ gen_list = []
 load_dotenv()
 
 def get_client_ip():
-    # Check for X-Forwarded-For header first
-    if request.headers.get('X-Forwarded-For'):
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith("Bearer "):
-            logging.error("Missing or invalid Authorization header")
-            return jsonify({"error": "Missing or invalid Authorization header"}), 401
-        
-        if auth_header.split(" ")[1] in gen_list:
-            return jsonify({"error": "User is already generating an image"}), 400
-        gen_list.append(auth_header.split(" ")[1])
 
+    if request.headers.get('X-Forwarded-For'):
         # Use the first IP in the X-Forwarded-For list
         return request.headers.get('X-Forwarded-For').split(',')[0].strip()
+    
+    # Fall back to remote_addr
+    return request.remote_addr
 
 # Setter opp logging
 logging.basicConfig(
