@@ -89,73 +89,89 @@ def ratelimit_handler(e):
 @limiter.limit("1 per 10 seconds")
 def generate():
     global gen_list
-    logging.info(gen_list)
-
-
-
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith("Bearer "):
-        logging.error("Missing or invalid Authorization header")
-        return jsonify({"error": "Missing or invalid Authorization header"}), 401
-   
-    authToken = auth_header.split(" ")[1]
-    username = verify_token(authToken)
-    if username is None:
-        logging.error("Invalid token")
-        return jsonify({"error": "Invalid token"}), 401
+    logging.info(f"Current generation list: {gen_list}")
     
-    if username in gen_list:
-        logging.error("User is already generating an image")
-        return jsonify({"error": "User is already generating an image"}), 400
-    
-    gen_list.append(username)
-    
-    with lock:
-        # Get JSON data from request
-        data = request.get_json()
-
-        # Validate prompt input
-        if not data or 'prompt' not in data:
-            logging.error("Missing 'prompt' in request body")
-            return jsonify({"error": "Missing 'prompt' in request body"}), 400
-
-        prompt = data['prompt']
-        num_steps = 8
-        guidance_scale = 0.0
-        max_seq_length = 512
-        userHeight = data.get('height', 1024)
-        userWidth = data.get('width', 1024)
-
+    try:
+        # First, validate the auth token and get username
         auth_header = request.headers.get('Authorization')
         if not auth_header or not auth_header.startswith("Bearer "):
             logging.error("Missing or invalid Authorization header")
             return jsonify({"error": "Missing or invalid Authorization header"}), 401
+        
         authToken = auth_header.split(" ")[1]
         username = verify_token(authToken)
         if username is None:
             logging.error("Invalid token")
             return jsonify({"error": "Invalid token"}), 401
+        
+        # Check if user is already generating an image
+        if username in gen_list:
+            logging.error(f"User {username} is already generating an image")
+            return jsonify({"error": "User is already generating an image"}), 400
+        
+        # Add username to generation list
+        gen_list.append(username)
+        logging.info(f"Added {username} to generation list: {gen_list}")
+        
+        with lock:
+            # Get JSON data from request
+            data = request.get_json()
 
+            # Validate prompt input
+            if not data or 'prompt' not in data:
+                logging.error("Missing 'prompt' in request body")
+                gen_list.remove(username)  # Remove from list if error
+                return jsonify({"error": "Missing 'prompt' in request body"}), 400
 
-        if userHeight > 1024 or userWidth > 1840 or userHeight < 1024 or userWidth < 576:
-            logging.error("Invalid image dimensions")
-            return jsonify({"error": "Invalid image dimensions"}), 400
+            prompt = data['prompt']
+            num_steps = 8
+            guidance_scale = 0.0
+            max_seq_length = 512
+            userHeight = data.get('height', 1024)
+            userWidth = data.get('width', 1024)
 
-        ip = request.headers.get('X-Forwarded-For')
-        logging.info(f"{username} on IP {ip}: Generating image ({userWidth}x{userHeight}) for prompt: {prompt}")
+            if userHeight > 1024 or userWidth > 1840 or userHeight < 1024 or userWidth < 576:
+                logging.error("Invalid image dimensions")
+                gen_list.remove(username)  # Remove from list if error
+                return jsonify({"error": "Invalid image dimensions"}), 400
 
-        image = pipeline(
-            prompt=prompt,
-            num_inference_steps=num_steps,
-            guidance_scale=guidance_scale,
-            max_sequence_length=max_seq_length,
-            height=userHeight,
-            width=userWidth
-        ).images[0]
-        output_path = "generated_image.png"
-        image.save(output_path)
-        gen_list.remove(authToken)
-        return send_file(output_path, mimetype='image/png')
+            ip = get_client_ip()
+            logging.info(f"{username} on IP {ip}: Generating image ({userWidth}x{userHeight}) for prompt: {prompt}")
+
+            image = pipeline(
+                prompt=prompt,
+                num_inference_steps=num_steps,
+                guidance_scale=guidance_scale,
+                max_sequence_length=max_seq_length,
+                height=userHeight,
+                width=userWidth
+            ).images[0]
+            output_path = "generated_image.png"
+            image.save(output_path)
+            
+            # Remove username from list after successful generation
+            if username in gen_list:
+                gen_list.remove(username)
+                logging.info(f"Removed {username} from generation list after successful generation")
+            
+            return send_file(output_path, mimetype='image/png')
+            
+    except Exception as e:
+        # Get username if it exists in the current context
+        username_to_remove = None
+        try:
+            if 'username' in locals() and username is not None:
+                username_to_remove = username
+        except:
+            pass
+            
+        # Make sure to remove username from list if any error occurs
+        if username_to_remove and username_to_remove in gen_list:
+            gen_list.remove(username_to_remove)
+            logging.info(f"Removed {username_to_remove} from generation list due to error")
+            
+        logging.error(f"Error generating image: {str(e)}")
+        return jsonify({"error": "An error occurred while generating the image"}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=False)
