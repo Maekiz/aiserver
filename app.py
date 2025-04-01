@@ -33,13 +33,13 @@ JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 app = Flask(__name__)
 lock = threading.Lock()
 CORS(app, origins=['https://aleksanderekman.github.io', "https://www.bakkadiffusion.no"])
-# Initialize Flask-Limiter
+
 limiter = Limiter(
     key_func=get_client_ip,
     app=app,
     default_limits=["1 per 10 seconds"]  # Default rate limits
 )
-# Model Configuration
+
 model_id = "stabilityai/stable-diffusion-3.5-large-turbo"
 
 nf4_config = BitsAndBytesConfig(
@@ -85,9 +85,14 @@ def ratelimit_handler(e):
     logging.warning(f"Rate limit exceeded: {request.remote_addr}")
     return jsonify({"error": "Rate limit exceeded. Please try again later."}), 429
 
+
 @app.route('/generate', methods=['POST'])
 @limiter.limit("1 per 10 seconds")
 def generate():
+    domain = request.headers.get('Host')
+    if domain != "www.bakkadiffusion.no":
+        logging.error(f"Unauthorized domain access attempt: {domain}")
+        return jsonify({"error": "Unauthorized domain access"}), 403
     global gen_list
     logging.info(f"Current generation list: {gen_list}")
     
@@ -114,7 +119,6 @@ def generate():
         logging.info(f"Added {username} to generation list: {gen_list}")
         
         with lock:
-            # Get JSON data from request
             data = request.get_json()
 
             # Validate prompt input
@@ -148,8 +152,7 @@ def generate():
             ).images[0]
             output_path = "generated_image.png"
             image.save(output_path)
-            
-            # Remove username from list after successful generation
+
             if username in gen_list:
                 gen_list.remove(username)
                 logging.info(f"Removed {username} from generation list after successful generation")
@@ -157,7 +160,6 @@ def generate():
             return send_file(output_path, mimetype='image/png')
             
     except Exception as e:
-        # Get username if it exists in the current context
         username_to_remove = None
         try:
             if 'username' in locals() and username is not None:
@@ -165,7 +167,7 @@ def generate():
         except:
             pass
             
-        # Make sure to remove username from list if any error occurs
+
         if username_to_remove and username_to_remove in gen_list:
             gen_list.remove(username_to_remove)
             logging.info(f"Removed {username_to_remove} from generation list due to error")
