@@ -29,6 +29,9 @@ logging.basicConfig(
 
 os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+BAKKADIFFUSION_API_KEY = os.getenv("BAKKADIFFUSION_API_KEY")
+if not JWT_SECRET_KEY or not BAKKADIFFUSION_API_KEY:
+    raise ValueError("JWT_SECRET_KEY and BAKKADIFFUSION_API_KEY must be set in the environment variables.")
 
 app = Flask(__name__)
 lock = threading.Lock()
@@ -91,6 +94,7 @@ def ratelimit_handler(e):
 def generate():
     api_key = request.headers.get('X-API-Key')
     if api_key != os.getenv("BAKKADIFFUSION_API_KEY"):
+        print(BAKKADIFFUSION_API_KEY)
         logging.error("Invalid API key")
         return jsonify({"error": "Invalid API key"}), 401
 
