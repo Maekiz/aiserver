@@ -91,8 +91,10 @@ def ratelimit_handler(e):
 def generate():
     domain = request.headers.get('Host')
     if domain != "www.bakkadiffusion.no":
+        print(domain)
         logging.error(f"Unauthorized domain access attempt: {domain}")
         return jsonify({"error": "Unauthorized domain access"}), 403
+    
     global gen_list
     logging.info(f"Current generation list: {gen_list}")
     
