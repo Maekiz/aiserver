@@ -89,7 +89,11 @@ def ratelimit_handler(e):
 @app.route('/generate', methods=['POST'])
 @limiter.limit("1 per 10 seconds")
 def generate():
-    
+    api_key = request.headers.get('X-API-Key')
+    if api_key != os.getenv("BAKKADIFFUSION_API_KEY"):
+        logging.error("Invalid API key")
+        return jsonify({"error": "Invalid API key"}), 401
+
     global gen_list
     logging.info(f"Current generation list: {gen_list}")
     
