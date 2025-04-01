@@ -89,11 +89,6 @@ def ratelimit_handler(e):
 @app.route('/generate', methods=['POST'])
 @limiter.limit("1 per 10 seconds")
 def generate():
-    domain = request.headers.get('Origin')
-    if domain != "www.bakkadiffusion.no":
-        print(domain)
-        logging.error(f"Unauthorized domain access attempt: {domain}")
-        return jsonify({"error": "Unauthorized domain access"}), 403
     
     global gen_list
     logging.info(f"Current generation list: {gen_list}")
